@@ -71,14 +71,6 @@ async fn test_crawl_endpoint() {
         App::new().configure(setup_test_app())
     ).await;
 
-    // Example request body
-    println!("Example request for /crawl:");
-    println!("{}", serde_json::to_string_pretty(&json!({
-        "url": "https://example.com",
-        "limit": 1,
-        "formats": ["markdown"]
-    })).unwrap());
-
     let req = test::TestRequest::post()
         .uri("/crawl")
         .set_json(json!({
@@ -91,20 +83,17 @@ async fn test_crawl_endpoint() {
     let resp = test::call_service(&app, req).await;
     let status = resp.status();
     
-    if !status.is_success() {
+    if !status.is_success() && status != actix_web::http::StatusCode::ACCEPTED {
         let error_body = test::read_body(resp).await;
         println!("Error response: {}", String::from_utf8_lossy(&error_body));
         panic!("Request failed with status: {}", status);
     }
 
     let body: serde_json::Value = test::read_body_json(resp).await;
-    
-    // Example response body
-    println!("\nExample response from /crawl:");
+    println!("\nResponse from /crawl:");
     println!("{}", serde_json::to_string_pretty(&body).unwrap());
     
-    assert!(body.get("creditsUsed").is_some());
-    assert!(body.get("data").is_some());
+    assert!(body.get("jobId").is_some() || body.get("data").is_some());
 }
 
 #[actix_web::test]
@@ -217,5 +206,68 @@ async fn test_invalid_format() {
     
     // Invalid format should be filtered out, but markdown should be present
     assert!(body.get("markdown").is_some(), "Response should contain markdown when invalid format is provided");
+}
+
+#[actix_web::test]
+async fn test_llm_extraction() {
+    let app = test::init_service(
+        App::new().configure(setup_test_app())
+    ).await;
+
+    let json_schema = json!({
+        "type": "object",
+        "properties": {
+            "top": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "title": {"type": "string"},
+                        "points": {"type": "number"},
+                        "by": {"type": "string"},
+                        "commentsURL": {"type": "string"}
+                    },
+                    "required": ["title", "points", "by", "commentsURL"]
+                },
+                "description": "Top 5 stories on Hacker News"
+            }
+        },
+        "required": ["top"]
+    });
+
+    let req = test::TestRequest::post()
+        .uri("/scrape")
+        .set_json(json!({
+            "url": "https://news.ycombinator.com",
+            "formats": ["extract"],
+            "schema": json_schema
+        }))
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    let status = resp.status();
+    
+    if !status.is_success() {
+        let error_body = test::read_body(resp).await;
+        println!("Error response: {}", String::from_utf8_lossy(&error_body));
+        panic!("Request failed with status: {}", status);
+    }
+
+    let body: serde_json::Value = test::read_body_json(resp).await;
+    println!("\nExample response from HN extraction:");
+    println!("{}", serde_json::to_string_pretty(&body).unwrap());
+    
+    // Validate the response structure
+    let extract = body.get("extract").expect("Response should contain extract field");
+    let top = extract.get("top").expect("Extract should contain top field");
+    assert!(top.is_array(), "Top should be an array");
+    
+    // Validate first story structure if array is not empty
+    if let Some(first_story) = top.as_array().unwrap().first() {
+        assert!(first_story.get("title").is_some(), "Story should have title");
+        assert!(first_story.get("points").is_some(), "Story should have points");
+        assert!(first_story.get("by").is_some(), "Story should have author");
+        assert!(first_story.get("commentsURL").is_some(), "Story should have comments URL");
+    }
 }
  

@@ -4,9 +4,9 @@ A Rust web service that provides a REST API for web scraping and crawling using 
 
 ## Features
 
-- `/scrape` endpoint for scraping single web pages
-- `/crawl` endpoint for crawling multiple pages
-- Support for multiple output formats (Markdown, HTML)
+- Single page scraping with the `/scrape` endpoint
+- Multi-page crawling with the `/crawl` endpoint
+- Multiple output formats (Markdown, HTML, Extract)
 - Schema-based content extraction
 - Environment-based configuration
 - Comprehensive test suite
@@ -45,9 +45,13 @@ cargo run
 
 The server will start at `http://127.0.0.1:8080`
 
-### API Endpoints
+## API Reference
 
-#### Scrape Endpoint
+### Scrape Endpoint
+
+The `/scrape` endpoint allows you to extract content from single web pages with optional structured data extraction.
+
+#### Basic Request Format
 
 ```http
 POST /scrape
@@ -55,7 +59,7 @@ Content-Type: application/json
 
 {
     "url": "https://example.com",
-    "formats": ["markdown", "html"],
+    "formats": ["markdown", "html", "extract"],
     "schema": {
         "type": "object",
         "properties": {
@@ -67,11 +71,112 @@ Content-Type: application/json
 }
 ```
 
+Parameters:
 - `url`: The webpage to scrape
 - `formats`: Array of desired output formats ("markdown", "html", "extract")
 - `schema`: Optional JSON schema for content extraction
 
-#### Crawl Endpoint
+#### Schema-based Content Extraction
+
+The extract feature allows you to define JSON schemas for structured content extraction. Here are common use cases:
+
+1. News Article Extraction:
+```http
+POST /scrape
+Content-Type: application/json
+
+{
+    "url": "https://example.com/article",
+    "formats": ["markdown", "extract"],
+    "schema": {
+        "type": "object",
+        "properties": {
+            "headline": {"type": "string"},
+            "author": {"type": "string"},
+            "publishDate": {"type": "string"},
+            "content": {"type": "string"},
+            "tags": {
+                "type": "array",
+                "items": {"type": "string"}
+            }
+        },
+        "required": ["headline", "content"]
+    }
+}
+```
+
+2. Product Page Extraction:
+```http
+POST /scrape
+Content-Type: application/json
+
+{
+    "url": "https://example.com/product",
+    "formats": ["extract"],
+    "schema": {
+        "type": "object",
+        "properties": {
+            "name": {"type": "string"},
+            "price": {"type": "number"},
+            "description": {"type": "string"},
+            "specifications": {
+                "type": "object",
+                "properties": {
+                    "dimensions": {"type": "string"},
+                    "weight": {"type": "string"},
+                    "color": {"type": "string"}
+                }
+            }
+        },
+        "required": ["name", "price"]
+    }
+}
+```
+
+3. List Page Extraction:
+```http
+POST /scrape
+Content-Type: application/json
+
+{
+    "url": "https://news.ycombinator.com",
+    "formats": ["extract"],
+    "schema": {
+        "type": "object",
+        "properties": {
+            "items": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "title": {"type": "string"},
+                        "points": {"type": "number"},
+                        "author": {"type": "string"},
+                        "url": {"type": "string"}
+                    },
+                    "required": ["title", "url"]
+                }
+            }
+        },
+        "required": ["items"]
+    }
+}
+```
+
+#### Extract Response Format
+
+```json
+{
+    "extract": {
+        // Extracted data matching your schema
+    },
+    "creditsUsed": 1
+}
+```
+
+### Crawl Endpoint
+
+The `/crawl` endpoint enables multi-page crawling starting from a seed URL.
 
 ```http
 POST /crawl
@@ -84,9 +189,33 @@ Content-Type: application/json
 }
 ```
 
+Parameters:
 - `url`: The starting URL for crawling
 - `limit`: Maximum number of pages to crawl
-- `formats`: Array of desired output formats ("markdown", "html")
+- `formats`: Array of desired output formats ("markdown", "html", "extract")
+
+## Best Practices
+
+### Schema Design
+1. Start with required fields only
+2. Use descriptive property names
+3. Add optional fields as needed
+4. Use appropriate field types:
+   - `string`: For text content
+   - `number`: For numeric values
+   - `array`: For lists
+   - `object`: For nested structures
+
+### Format Selection
+1. Use `["markdown", "extract"]` to get both formatted content and structured data
+2. Use `["extract"]` alone for faster responses when only structured data is needed
+3. Use `["html"]` when you need to preserve the original HTML structure
+
+### Error Handling
+1. Check response status codes
+2. Validate extracted data against your schema
+3. Handle missing optional fields gracefully
+4. Implement proper timeout handling
 
 ## Development
 
