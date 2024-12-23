@@ -121,11 +121,15 @@ async fn main() -> std::io::Result<()> {
     // Get API key from environment variable
     let api_key = env::var("FIRECRAWL_API_KEY").expect("FIRECRAWL_API_KEY must be set");
     
+    // Get port from environment variable or use default
+    let port = env::var("PORT").unwrap_or_else(|_| "8080".to_string());
+    let addr = format!("0.0.0.0:{}", port);
+    
     // Initialize FirecrawlApp
     let app = FirecrawlApp::new(&api_key).expect("Failed to initialize FirecrawlApp");
     let app_data = web::Data::new(app);
 
-    println!("Server running at http://127.0.0.1:8080");
+    println!("Server running at http://{}", addr);
 
     HttpServer::new(move || {
         App::new()
@@ -133,7 +137,7 @@ async fn main() -> std::io::Result<()> {
             .service(web::resource("/scrape").route(web::post().to(scrape)))
             .service(web::resource("/crawl").route(web::post().to(crawl)))
     })
-    .bind("127.0.0.1:8080")?
+    .bind(&addr)?
     .run()
     .await
 }
