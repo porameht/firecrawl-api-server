@@ -2,6 +2,7 @@
 mod tests;
 
 use actix_web::{web, App, HttpResponse, HttpServer, Responder};
+use actix_cors::Cors;
 use firecrawl::{
     crawl::{CrawlOptions, CrawlScrapeFormats, CrawlScrapeOptions},
     scrape::{ScrapeFormats, ScrapeOptions, ExtractOptions},
@@ -132,7 +133,15 @@ async fn main() -> std::io::Result<()> {
     println!("Server running at http://{}", addr);
 
     HttpServer::new(move || {
+        // Configure CORS
+        let cors = Cors::default()
+            .allow_any_origin()
+            .allow_any_method()
+            .allow_any_header()
+            .max_age(3600);
+
         App::new()
+            .wrap(cors)  // Add CORS middleware
             .app_data(app_data.clone())
             .service(web::resource("/scrape").route(web::post().to(scrape)))
             .service(web::resource("/crawl").route(web::post().to(crawl)))
